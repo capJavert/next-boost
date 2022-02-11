@@ -212,3 +212,106 @@ describe('cached handler with paramFilter conf', () => {
     cached.close()
   })
 })
+
+describe('cached handler with headersFilter conf', () => {
+  let cached: CHReturn
+  let server: http.Server
+
+  beforeAll(async function () {
+    const script = require.resolve('./mock')
+    cached = await CachedHandler(
+      { script },
+      {
+        quiet: false,
+        headersFilter: headers => {
+          const headersCopy = {
+            ...headers,
+          }
+          delete headersCopy['x-uid']
+
+          return headersCopy
+        },
+      }
+    )
+    cached.cache.del('body:/headers')
+    server = new http.Server(cached.handler)
+  })
+
+  it('filters the headers that are saved to cache', done => {
+    request(server)
+      .get('/headers')
+      .end((_, res) => {
+        expect(res.text).toEqual('headers')
+        const headers = JSON.parse(
+          cached.cache.get('header:/headers').toString()
+        )
+        expect(headers['x-uid']).toBeUndefined()
+        expect(headers['x-lang']).toEqual('en')
+        done()
+      })
+  })
+
+  afterAll(() => {
+    server.close()
+    cached.close()
+  })
+})
+
+describe('cached handler with setHeaders conf', () => {
+  let cached: CHReturn
+  let server: http.Server
+
+  beforeAll(async function () {
+    const script = require.resolve('./mock')
+    cached = await CachedHandler(
+      { script },
+      {
+        quiet: false,
+        rules: [{ regex: '/headers', ttl: 2 }],
+        setHeaders: (res, headers) => {
+          for (const k in headers) {
+            if (k === 'x-lang') {
+              res.setHeader(k, headers[k] + '1')
+            } else {
+              res.setHeader(k, headers[k])
+            }
+          }
+        },
+      }
+    )
+    cached.cache.del('body:/headers')
+    server = new http.Server(cached.handler)
+  })
+
+  it('adjusts headers inside the response on cache hit', done => {
+    request(server)
+      .get('/headers')
+      .end((_, res) => {
+        expect(res.text).toEqual('headers')
+
+        request(server)
+          .get('/headers')
+          .end((_, res) => {
+            expect(res.text).toEqual('headers')
+            expect(res.headers['x-lang']).toEqual('en1')
+            expect(cached.cache.has('body:/headers')).toEqual('hit')
+
+            setTimeout(() => {
+              request(server)
+                .get('/headers')
+                .end((_, res) => {
+                  expect(res.text).toEqual('headers')
+                  expect(res.headers['x-lang']).toEqual('en1')
+                  expect(cached.cache.has('body:/headers')).toEqual('stale')
+                  done()
+                })
+            }, 2000)
+          })
+      })
+  })
+
+  afterAll(() => {
+    server.close()
+    cached.close()
+  })
+})

@@ -1,6 +1,6 @@
 import { ServerResponse } from 'http'
 import { PassThrough } from 'stream'
-import { CacheAdapter } from './handler'
+import { CacheAdapter, HandlerConfig, SetHeaders } from './handler'
 import { sleep } from './utils'
 
 const MAX_WAIT = 10000 // 10 seconds
@@ -16,7 +16,8 @@ export async function serveCache(
   lock: Set<string>,
   key: string,
   forced: boolean,
-  res: ServerResponse
+  res: ServerResponse,
+  conf: HandlerConfig
 ): Promise<ServeResult> {
   const rv: ServeResult = { status: 'force', stop: false }
   if (forced) return rv
@@ -33,7 +34,7 @@ export async function serveCache(
     payload.body = cache.get('body:' + key)
     payload.headers = JSON.parse(cache.get('header:' + key).toString())
   }
-  send(payload, res)
+  send(payload, res, conf.setHeaders)
 
   // no need to run update again
   if ((lock.has(key) && rv.status === 'stale') || rv.status === 'hit') {
@@ -60,16 +61,23 @@ async function waitAndServe(hasLock: () => boolean, rv: ServeResult) {
 
 function send(
   payload: { body: Buffer | null; headers: Record<string, any> | null },
-  res: ServerResponse
+  res: ServerResponse,
+  setHeaders?: SetHeaders
 ) {
   const { body, headers } = payload
   if (!body) {
     res.statusCode = 504
     return res.end()
   }
-  for (const k in headers) {
-    res.setHeader(k, headers[k])
+
+  if (typeof setHeaders === 'function') {
+    setHeaders(res, headers)
+  } else {
+    for (const k in headers) {
+      res.setHeader(k, headers[k])
+    }
   }
+
   res.statusCode = 200
   res.removeHeader('transfer-encoding')
   res.setHeader('content-length', Buffer.byteLength(body))

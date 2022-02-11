@@ -3,6 +3,13 @@ import { RequestListener } from '../src/renderer'
 
 export default async function init(): Promise<RequestListener> {
   const cb: RequestListener = (req, res) => {
+    if (req.url.startsWith('/headers')) {
+      res.setHeader('x-uid', 'some-uid-kao')
+      res.setHeader('x-lang', 'en')
+      res.write('headers')
+      res.end()
+      return
+    }
     if (req.url.startsWith('/params')) {
       res.write('params')
     }

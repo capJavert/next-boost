@@ -179,7 +179,9 @@ interface HandlerConfig {
   }
   rules?: Array<URLCacheRule>
   paramFilter?: ParamFilter
-  cacheKey?: CacheKeyBuilder
+  cacheKey?: CacheKeyBuilder,
+  setHeaders?: SetHeaders
+  headersFilter?: HeadersFilter
 }
 
 interface URLCacheRule {
@@ -189,6 +191,13 @@ interface URLCacheRule {
 
 type ParamFilter = (param: string) => boolean
 type CacheKeyBuilder = (req: IncomingMessage) => string
+type SetHeaders = (
+  res: OutgoingMessage,
+  headers: Record<string, any>
+) => void
+type HeadersFilter = (
+  headers: Record<string, any>
+) => Record<string, any>
 ```
 
 ### Logging

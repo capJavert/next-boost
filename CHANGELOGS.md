@@ -1,5 +1,10 @@
 # CHANGELOGS
 
+## 0.11.0
+
+- Add support for `config.setHeaders`
+- Add support for `config.headersFilter`
+
 ## 0.8.6
 
 - Refactor

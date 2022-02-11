@@ -1,4 +1,4 @@
-import { IncomingMessage, RequestListener } from 'http'
+import { IncomingMessage, OutgoingMessage, RequestListener } from 'http'
 import Cache from 'next-boost-hdc-adapter'
 import { gzipSync } from 'zlib'
 import { serveCache } from './cache-manager'
@@ -43,6 +43,15 @@ export type CacheAdapter = {
   del(key: string): void
 }
 
+export type SetHeaders = (
+  res: OutgoingMessage,
+  headers: Record<string, any>
+) => void
+
+export type HeadersFilter = (
+  headers: Record<string, any>
+) => Record<string, any>
+
 export interface HandlerConfig {
   filename?: string // config file's path
   quiet?: boolean
@@ -50,6 +59,8 @@ export interface HandlerConfig {
   cacheAdapter?: CacheAdapter
   paramFilter?: ParamFilter
   cacheKey?: CacheKeyBuilder
+  setHeaders?: SetHeaders
+  headersFilter?: HeadersFilter
 }
 
 type RendererType = ReturnType<typeof Renderer>
@@ -80,7 +91,14 @@ const wrap: WrappedHandler = (cache, conf, renderer, plainHandler) => {
     const start = process.hrtime()
     const fc = req.headers['x-cache-status'] === 'update' // forced
 
-    const { status, stop } = await serveCache(cache, SYNC_LOCK, key, fc, res)
+    const { status, stop } = await serveCache(
+      cache,
+      SYNC_LOCK,
+      key,
+      fc,
+      res,
+      conf
+    )
     if (stop) return !conf.quiet && log(start, status, req.url)
     // log the time took for staled
     if (status === 'stale') !conf.quiet && log(start, status, req.url)
@@ -98,10 +116,15 @@ const wrap: WrappedHandler = (cache, conf, renderer, plainHandler) => {
     !conf.quiet && log(start, status === 'stale' ? 'update' : status, req.url)
 
     if (rv.statusCode === 200 && body.length > 0) {
+      const headersToSave =
+        typeof conf.headersFilter === 'function'
+          ? conf.headersFilter(rv.headers)
+          : rv.headers
+
       // save gzipped data
-      const buf = isZipped(rv.headers) ? body : gzipSync(body)
+      const buf = isZipped(headersToSave) ? body : gzipSync(body)
       cache.set('body:' + key, buf, ttl)
-      cache.set('header:' + key, toBuffer(rv.headers), ttl)
+      cache.set('header:' + key, toBuffer(headersToSave), ttl)
     } else if (status === 'force') {
       // updating but empty result
       cache.del('body:' + key)

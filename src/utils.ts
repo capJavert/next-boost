@@ -1,7 +1,7 @@
 import fs from 'fs'
 import { ServerResponse } from 'http'
 import path from 'path'
-import { HandlerConfig } from './handler'
+import { HandlerConfig, SetHeaders } from './handler'
 import { RenderResult } from './renderer'
 
 function isZipped(headers: { [key: string]: any }): boolean {
@@ -18,8 +18,15 @@ function log(start: [number, number], status: string, msg?: string): void {
   console.log('%s | %s: %s', time.padStart(7), status.padEnd(6), msg)
 }
 
-function serve(res: ServerResponse, rv: RenderResult) {
-  for (const k in rv.headers) res.setHeader(k, rv.headers[k])
+function serve(res: ServerResponse, rv: RenderResult, setHeaders?: SetHeaders) {
+  if (typeof setHeaders === 'function') {
+    setHeaders(res, rv.headers)
+  } else {
+    for (const k in rv.headers) {
+      res.setHeader(k, rv.headers[k])
+    }
+  }
+
   res.statusCode = rv.statusCode
   res.end(Buffer.from(rv.body))
 }
