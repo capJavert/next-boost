@@ -59,5 +59,8 @@
     "cache",
     "stale-while-revalidate",
     "react"
-  ]
+  ],
+  "volta": {
+    "node": "14.19.0"
+  }
 }
